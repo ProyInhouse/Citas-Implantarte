@@ -1,0 +1,165 @@
+{
+  "name": "Implantarte - Flujo Completo de Citas",
+  "nodes": [
+    {
+      "parameters": { "httpMethod": "POST", "path": "implantarte-citas", "responseMode": "responseNode", "options": {} },
+      "id": "node-webhook", "name": "Webhook Entrada",
+      "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [200, 400]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const raw = $input.first().json;\nconst body = raw.body || raw;\nconst isTwilio = !!(body.From && body.Body !== undefined);\nconst telefono = isTwilio ? (body.From||'').replace('whatsapp:','').replace('+','') : (body.telefono||'unknown');\nconst msgOriginal = (isTwilio ? body.Body : body.mensaje) || '';\nconst mensaje = msgOriginal.toLowerCase().trim();\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.sessions) staticData.sessions = {};\n\nconst ODONTOLOGOS = {\n  '1': { id:'1', nombre:'Dr. Alejandro Contreras', especialidad:'Implantolog\\u00eda y Cirug\\u00eda', calendar_id:'3e2d7a3f62231eff8e8f233ec1dbe1f8a416539f52530171c9e457d7c735e87a@group.calendar.google.com', dias:[1,2,3,4,5,6], inicio:'08:00', fin:'17:00', fin_sabado:'13:00', duracion_min:60 },\n  '2': { id:'2', nombre:'Dra. Mar\\u00eda B. Fuenmayor', especialidad:'Ortodoncia', calendar_id:'7b66ca52aef646deff180d5d8e1fcb1767ae9f26db8304f9879c93cdaffe2dfe@group.calendar.google.com', dias:[1,3,5], inicio:'09:00', fin:'18:00', duracion_min:60 },\n  '3': { id:'3', nombre:'Dr. Germ\\u00e1n', especialidad:'Odontolog\\u00eda General', calendar_id:'cf87f5290d01e5ad24e5e8fe6f0251a57e757c1fb3b95c706ca0c924fc779930@group.calendar.google.com', dias:[2,3,4,5,6], inicio:'08:00', fin:'16:00', duracion_min:45 },\n  '4': { id:'4', nombre:'Dra. Vanessa', especialidad:'Odontolog\\u00eda Est\\u00e9tica', calendar_id:'cb7d0c4882de72e7b799c6f0c91291beef2dca67a9f23485428203f786ee3e4c@group.calendar.google.com', dias:[1,2,3,4], inicio:'10:00', fin:'19:00', duracion_min:60 },\n  '5': { id:'5', nombre:'Dra. Beatriz', especialidad:'Radiolog\\u00eda', calendar_id:'b45e211b61fb2ddb7309f449c7cc507edd0a9b90e2d359bead1fdc2639b0af4f@group.calendar.google.com', dias:[1,2,3,4,5], inicio:'08:00', fin:'15:00', duracion_min:30 }\n};\n\nconst MENU = '\\ud83e\\uddb7 *\\u00a1Bienvenido a Implantarte!*\\n\\n\\u00bfEn qu\\u00e9 puedo ayudarte hoy?\\n\\n1\\ufe0f\\u20e3 Agendar cita de Odontolog\\u00eda\\n2\\ufe0f\\u20e3 Agendar cita de Radiolog\\u00eda\\n3\\ufe0f\\u20e3 Consulta de Precios\\n4\\ufe0f\\u20e3 Reenv\\u00edo de Resultados\\n\\nResponde con el n\\u00famero de tu preferencia.';\n\nlet session = staticData.sessions[telefono] || { estado: 'inicio' };\nif (session.updated_at) {\n  const min = (Date.now() - new Date(session.updated_at).getTime()) / 60000;\n  if (min > 30) session = { estado: 'inicio' };\n}\nif (['menu','inicio','reiniciar','hola','hi','0','reset','cancelar'].includes(mensaje)) session = { estado: 'inicio' };\n\nlet respuesta = '';\nlet accion = 'responder';\n\nif (session.estado === 'inicio' || session.estado === 'menu') {\n  if (['1','odontolog','especialista','dentista'].some(k => mensaje.includes(k))) {\n    session.servicio = 'odontologia'; session.estado = 'solicitar_nombre';\n    respuesta = '\\ud83d\\udc64 Para agendar tu cita de *Odontolog\\u00eda*, escribe tu *nombre y apellido* completo.';\n  } else if (['2','radiolog','rayos','rx'].some(k => mensaje.includes(k))) {\n    session.servicio = 'radiologia'; session.odontologo = ODONTOLOGOS['5']; session.estado = 'solicitar_nombre_radio';\n    respuesta = '\\ud83d\\udc64 Para agendar tu cita de *Radiolog\\u00eda* con *Dra. Beatriz*, escribe tu *nombre y apellido* completo.';\n  } else if (['3','precio','costo','tarifa'].some(k => mensaje.includes(k))) {\n    session.estado = 'inicio';\n    respuesta = '\\ud83d\\udcb0 Para consulta de *Precios* comun\\u00edcate con nuestra cl\\u00ednica.\\n\\nEscribe *hola* para volver al men\\u00fa.';\n  } else if (['4','result','reenv'].some(k => mensaje.includes(k))) {\n    session.estado = 'inicio';\n    respuesta = '\\ud83d\\udcc1 Para *Reenv\\u00edo de Resultados* comun\\u00edcate con Implantarte.\\n\\nEscribe *hola* para volver al men\\u00fa.';\n  } else { session.estado = 'inicio'; respuesta = MENU; }\n\n} else if (session.estado === 'solicitar_nombre') {\n  const nombre = msgOriginal.trim();\n  if (nombre.length < 3 || /^\\d+$/.test(nombre)) {\n    respuesta = '\\u270f\\ufe0f Escribe tu *nombre y apellido* completo. Ej: _Juan P\\u00e9rez_';\n  } else {\n    session.nombre_paciente = nombre; session.estado = 'seleccion_odontologo';\n    respuesta = '\\ud83d\\udc4b Hola, *'+nombre+'*!\\n\\n*Especialistas en Odontolog\\u00eda:*\\n\\n1\\ufe0f\\u20e3 Dr. Alejandro Contreras \\u2014 Implantolog\\u00eda y Cirug\\u00eda\\n2\\ufe0f\\u20e3 Dra. Mar\\u00eda B. Fuenmayor \\u2014 Ortodoncia\\n3\\ufe0f\\u20e3 Dr. Germ\\u00e1n \\u2014 Odontolog\\u00eda General\\n4\\ufe0f\\u20e3 Dra. Vanessa \\u2014 Odontolog\\u00eda Est\\u00e9tica\\n\\nEscribe el *n\\u00famero* de tu preferencia.';\n  }\n\n} else if (session.estado === 'solicitar_nombre_radio') {\n  const nombre = msgOriginal.trim();\n  if (nombre.length < 3 || /^\\d+$/.test(nombre)) {\n    respuesta = '\\u270f\\ufe0f Escribe tu *nombre y apellido* completo. Ej: _Juan P\\u00e9rez_';\n  } else {\n    session.nombre_paciente = nombre; session.estado = 'verificando_disponibilidad'; session.fecha_preferida = 'proximos'; accion = 'verificar_calendar';\n    respuesta = '\\ud83d\\udd0d Buscando horarios con *Dra. Beatriz*...';\n  }\n\n} else if (session.estado === 'seleccion_odontologo') {\n  if (['1','2','3','4'].includes(msgOriginal.trim())) {\n    const doc = ODONTOLOGOS[msgOriginal.trim()];\n    session.odontologo = doc; session.estado = 'verificando_disponibilidad'; session.fecha_preferida = 'proximos'; accion = 'verificar_calendar';\n    respuesta = '\\ud83d\\udd0d Buscando pr\\u00f3ximos horarios con *'+doc.nombre+'*...';\n  } else {\n    respuesta = '\\u274c Elige un n\\u00famero del *1 al 4*:\\n\\n1\\ufe0f\\u20e3 Dr. Alejandro Contreras\\n2\\ufe0f\\u20e3 Dra. Mar\\u00eda B. Fuenmayor\\n3\\ufe0f\\u20e3 Dr. Germ\\u00e1n\\n4\\ufe0f\\u20e3 Dra. Vanessa';\n  }\n\n} else if (session.estado === 'fecha_hora') {\n  session.fecha_preferida = msgOriginal; session.estado = 'verificando_disponibilidad'; accion = 'verificar_calendar';\n  respuesta = '\\ud83d\\udd0d Verificando disponibilidad...';\n\n} else if (session.estado === 'seleccion_slot') {\n  const slots = session.slots_propuestos || [];\n  const idx = parseInt(msgOriginal) - 1;\n  if (idx >= 0 && idx < slots.length) {\n    const sl = slots[idx]; session.slot_confirmado = sl; session.estado = 'confirmacion';\n    const doc = session.odontologo || {};\n    const fechaD = new Date(sl.inicio).toLocaleDateString('es-VE', { weekday:'long', day:'numeric', month:'long', year:'numeric' });\n    respuesta = '\\ud83d\\udccb *Resumen de tu cita:*\\n\\n\\ud83d\\udc68\\u200d\\u2695\\ufe0f '+(doc.nombre||'')+'\\n\\ud83e\\uddb7 '+(doc.especialidad||'')+'\\n\\ud83d\\udcc5 '+fechaD+'\\n\\ud83d\\udd50 '+sl.label+' hrs\\n\\ud83d\\udc64 '+(session.nombre_paciente||'')+'\\n\\n\\u00bfConfirmas?\\n\\n*1* \\u2705 S\\u00ed, confirmar\\n*2* \\ud83d\\udcc5 Elegir otro d\\u00eda\\n*3* \\ud83d\\udd04 Ver otros horarios';\n  } else {\n    const ls = slots.map((sl,i) => (i+1)+'\\ufe0f\\u20e3 '+sl.label+' hrs').join('\\n');\n    respuesta = '\\u274c Elige *1*, *2* o *3*:\\n\\n'+ls;\n  }\n\n} else if (session.estado === 'confirmacion') {\n  if (['1','si','s\\u00ed','confirmo','ok','dale','yes'].some(k => mensaje.includes(k))) {\n    session.estado = 'crear_evento'; accion = 'crear_evento'; respuesta = '\\u23f3 Agendando tu cita...';\n  } else if (['2','otro dia','otro d\\u00eda','diferente'].some(k => mensaje.includes(k))) {\n    session.estado = 'fecha_hora';\n    respuesta = '\\ud83d\\udcc5 \\u00bfPara qu\\u00e9 d\\u00eda prefieres?\\n\\nEscribe: *hoy*, *ma\\u00f1ana*, el d\\u00eda (ej. *lunes*) o una fecha (ej. *05/05/2026*).';\n  } else if (['3','otros horarios','ver m\\u00e1s'].some(k => mensaje.includes(k))) {\n    session.estado = 'verificando_disponibilidad'; session.fecha_preferida = 'proximos_mas'; accion = 'verificar_calendar';\n    respuesta = '\\ud83d\\udd0d Buscando m\\u00e1s horarios...';\n  } else {\n    respuesta = '\\u00bfConfirmas?\\n\\n*1* \\u2705 S\\u00ed\\n*2* \\ud83d\\udcc5 Otro d\\u00eda\\n*3* \\ud83d\\udd04 Otros horarios';\n  }\n\n} else if (session.estado === 'gestion_cita') {\n  const odont = session.odontologo || {};\n  const slotC = session.ultima_cita || {};\n  const fechaC = slotC.inicio ? new Date(slotC.inicio).toLocaleDateString('es-VE',{weekday:'long',day:'numeric',month:'long'}) : 'pr\\u00f3ximamente';\n  if (['1','result','realiz','asisti'].some(k => mensaje.includes(k))) {\n    session.estado = 'realizacion_cita';\n    respuesta = '\\ud83c\\udfe5 \\u00bfC\\u00f3mo result\\u00f3 tu cita?\\n\\n1\\ufe0f\\u20e3 \\u2705 Cita realizada\\n2\\ufe0f\\u20e3 \\u274c No pude asistir\\n3\\ufe0f\\u20e3 \\ud83d\\udd04 Reagendar';\n  } else if (['2','reagend','cambiar'].some(k => mensaje.includes(k))) {\n    session.estado = 'verificando_disponibilidad'; session.fecha_preferida = 'proximos'; accion = 'verificar_calendar';\n    respuesta = '\\ud83d\\udd0d Buscando pr\\u00f3ximos horarios...';\n  } else if (['3','menu','volver','principal'].some(k => mensaje.includes(k))) {\n    session.estado = 'inicio'; respuesta = MENU;\n  } else if (['4','cancel'].some(k => mensaje.includes(k))) {\n    session.estado = 'cancelar_confirmacion';\n    respuesta = '\\u26a0\\ufe0f \\u00bfEst\\u00e1s seguro de *cancelar* tu cita?\\n\\n\\ud83d\\udc68\\u200d\\u2695\\ufe0f '+(odont.nombre||'')+'\\n\\ud83d\\udcc5 '+fechaC+(slotC.label ? ' \\u2022 '+slotC.label+' hrs' : '')+'\\n\\n*1* S\\u00ed, cancelar\\n*2* No, mantener mi cita';\n  } else {\n    respuesta = '\\ud83d\\udccb *Tu cita:*\\n\\n\\ud83d\\udc68\\u200d\\u2695\\ufe0f '+(odont.nombre||'')+'\\n\\ud83d\\udcc5 '+fechaC+(slotC.label ? ' \\u2022 '+slotC.label+' hrs' : '')+'\\n\\n1\\ufe0f\\u20e3 Reportar resultado\\n2\\ufe0f\\u20e3 Reagendar\\n3\\ufe0f\\u20e3 Men\\u00fa principal\\n4\\ufe0f\\u20e3 \\u274c Cancelar cita';\n  }\n\n} else if (session.estado === 'cancelar_confirmacion') {\n  if (['1','si','s\\u00ed','confirmo','cancelar'].some(k => mensaje.includes(k))) {\n    if (session.event_id) {\n      session.estado = 'cancelando'; accion = 'cancelar_evento'; respuesta = '\\u23f3 Cancelando tu cita...';\n    } else {\n      session.estado = 'completado';\n      respuesta = '\\u2705 Tu cita ha sido cancelada.\\n\\nEscribe *hola* para agendar una nueva cita. \\ud83e\\uddb7';\n    }\n  } else if (['2','no','mantener'].some(k => mensaje.includes(k))) {\n    session.estado = 'gestion_cita';\n    respuesta = '\\u2705 Mantuvimos tu cita.\\n\\n1\\ufe0f\\u20e3 Reportar resultado\\n2\\ufe0f\\u20e3 Reagendar\\n3\\ufe0f\\u20e3 Men\\u00fa principal\\n4\\ufe0f\\u20e3 \\u274c Cancelar cita';\n  } else {\n    respuesta = '\\u00bfCancelas tu cita?\\n\\n*1* S\\u00ed, cancelar\\n*2* No, mantener';\n  }\n\n} else if (session.estado === 'realizacion_cita') {\n  if (['1','realiz','asisti','si','s\\u00ed'].some(k => mensaje.includes(k))) {\n    session.estado = 'fin_proceso'; session.resultado_cita = 'realizada';\n    respuesta = '\\u2705 \\u00a1Gracias por tu visita! \\ud83d\\ude0a\\n\\n1\\ufe0f\\u20e3 Agendar nueva cita\\n2\\ufe0f\\u20e3 Cerrar';\n  } else if (['2','no','ausente'].some(k => mensaje.includes(k))) {\n    session.estado = 'fin_proceso'; session.resultado_cita = 'ausente';\n    respuesta = '\\ud83d\\ude14 Lo sentimos.\\n\\n1\\ufe0f\\u20e3 Reagendar cita\\n2\\ufe0f\\u20e3 Cerrar';\n  } else if (['3','reagend'].some(k => mensaje.includes(k))) {\n    session.estado = 'verificando_disponibilidad'; session.fecha_preferida = 'proximos'; accion = 'verificar_calendar';\n    respuesta = '\\ud83d\\udd0d Buscando pr\\u00f3ximos horarios...';\n  } else { respuesta = 'Responde *1* si asististe, *2* si no pudiste, o *3* para reagendar.'; }\n\n} else if (session.estado === 'fin_proceso') {\n  if (['1','nueva','agendar','reagend','cita'].some(k => mensaje.includes(k))) {\n    const nombreG = session.nombre_paciente; const servG = session.servicio;\n    session = { estado: 'seleccion_odontologo', nombre_paciente: nombreG, servicio: servG };\n    if (servG === 'radiologia') {\n      session.odontologo = ODONTOLOGOS['5']; session.estado = 'verificando_disponibilidad'; session.fecha_preferida = 'proximos'; accion = 'verificar_calendar';\n      respuesta = '\\ud83d\\udd0d Buscando horarios con *Dra. Beatriz*...';\n    } else {\n      respuesta = '\\ud83d\\udc4b Hola de nuevo, *'+nombreG+'*! Elige tu especialista:\\n\\n1\\ufe0f\\u20e3 Dr. Alejandro Contreras\\n2\\ufe0f\\u20e3 Dra. Mar\\u00eda B. Fuenmayor\\n3\\ufe0f\\u20e3 Dr. Germ\\u00e1n\\n4\\ufe0f\\u20e3 Dra. Vanessa';\n    }\n  } else if (['2','cerrar','listo','no'].some(k => mensaje.includes(k))) {\n    session.estado = 'completado';\n    respuesta = '\\u2705 \\u00a1Hasta pronto! Fue un placer atenderte en Implantarte. \\ud83d\\ude0a\\n\\nEscribe *hola* cuando nos necesites.';\n  } else {\n    respuesta = session.resultado_cita === 'ausente' ? '1\\ufe0f\\u20e3 Reagendar cita\\n2\\ufe0f\\u20e3 Cerrar' : '1\\ufe0f\\u20e3 Agendar nueva cita\\n2\\ufe0f\\u20e3 Cerrar';\n  }\n\n} else { session.estado = 'inicio'; respuesta = MENU; }\n\nsession.updated_at = new Date().toISOString();\nstaticData.sessions[telefono] = JSON.parse(JSON.stringify(session));\nreturn [{ json: { telefono, mensaje: msgOriginal, session: JSON.parse(JSON.stringify(session)), respuesta, accion, isTwilio } }];"
+      },
+      "id": "node-session", "name": "Session Manager",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [420, 400]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            { "conditions": { "conditions": [{ "leftValue": "={{ $json.accion }}", "rightValue": "verificar_calendar", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "verificar" },
+            { "conditions": { "conditions": [{ "leftValue": "={{ $json.accion }}", "rightValue": "crear_evento", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "crear" },
+            { "conditions": { "conditions": [{ "leftValue": "={{ $json.accion }}", "rightValue": "cancelar_evento", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "cancelar" }
+          ]
+        },
+        "options": { "fallbackOutput": "extra" }
+      },
+      "id": "node-switch-accion", "name": "Router de Acciones",
+      "type": "n8n-nodes-base.switch", "typeVersion": 3, "position": [640, 400]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const input = $input.first().json;\nconst session = input.session;\nconst odontologo = session.odontologo;\nconst fechaPref = session.fecha_preferida || '';\n\nfunction encontrarProximoDia(doc, desde) {\n  const hoy = new Date();\n  for (let i = (desde||1); i <= 30; i++) {\n    const d = new Date(hoy); d.setDate(d.getDate()+i);\n    const raw = d.getDay(); const dia = raw===0?7:raw;\n    if (doc.dias.includes(dia)) return { fecha:d, offset:i };\n  }\n  return null;\n}\n\nfunction parsearFecha(texto) {\n  const hoy = new Date(); const t = texto.toLowerCase();\n  if (t.includes('hoy')) return new Date(hoy);\n  if (t.includes('ma\\u00f1ana')||t.includes('manana')) { const m=new Date(hoy);m.setDate(m.getDate()+1);return m; }\n  const dias = {lunes:1,martes:2,miercoles:3,jueves:4,viernes:5,sabado:6};\n  for (const [n,num] of Object.entries(dias)) { if (t.includes(n)) { const d=new Date(hoy);const diff=(num-d.getDay()+7)%7||7;d.setDate(d.getDate()+diff);return d; } }\n  const m1 = texto.match(/(\\d{1,2})[\\/\\-](\\d{1,2})[\\/\\-](\\d{4})/);\n  if (m1) return new Date(m1[3]+'-'+m1[2].padStart(2,'0')+'-'+m1[1].padStart(2,'0')+'T12:00:00');\n  return null;\n}\n\nfunction generarSlots(f, inicio, fin, dur) {\n  const slots=[]; const [hI,mI]=inicio.split(':').map(Number); const [hF,mF]=fin.split(':').map(Number);\n  let cur=new Date(f); cur.setHours(hI,mI,0,0); const finD=new Date(f); finD.setHours(hF,mF,0,0);\n  while (cur<finD) {\n    const h=cur.getHours();\n    if (h===12) { cur=new Date(cur); cur.setHours(13,0,0,0); continue; }\n    const end=new Date(cur.getTime()+dur*60000);\n    if (end<=finD) slots.push({inicio:cur.toISOString(),fin:end.toISOString(),label:String(h).padStart(2,'0')+':'+String(cur.getMinutes()).padStart(2,'0')});\n    cur=new Date(cur.getTime()+dur*60000);\n  }\n  return slots;\n}\n\nconst esProximos = fechaPref==='proximos'||fechaPref==='proximos_mas'||!fechaPref;\nconst offsetInicio = (fechaPref==='proximos_mas'&&session.ultimo_offset) ? (session.ultimo_offset+1) : 1;\nlet fecha=null, offsetUsado=null;\nif (esProximos) { const r=encontrarProximoDia(odontologo,offsetInicio); if(r){fecha=r.fecha;offsetUsado=r.offset;} }\nelse { fecha=parsearFecha(fechaPref); }\n\nconst staticData=$getWorkflowStaticData('global');\nif (!staticData.sessions) staticData.sessions={};\nconst s=JSON.parse(JSON.stringify(staticData.sessions[input.telefono]||{}));\ns.odontologo=odontologo; s.nombre_paciente=session.nombre_paciente; s.servicio=session.servicio;\n\nif (!fecha) {\n  s.estado='inicio'; staticData.sessions[input.telefono]=s;\n  return [{ json: Object.assign({},input,{respuesta:'\\ud83d\\ude14 No encontramos horarios en los pr\\u00f3ximos 30 d\\u00edas. Escribe *hola* para volver al men\\u00fa.',session:JSON.parse(JSON.stringify(s)),_error:'no_fecha'}) }];\n}\n\nconst rawDay=fecha.getDay(); const diaSemana=rawDay===0?7:rawDay;\nconst trabaja=odontologo.dias.includes(diaSemana); const esSab=diaSemana===6;\nconst horaFin=(esSab&&odontologo.fin_sabado)?odontologo.fin_sabado:odontologo.fin;\n\nif (!trabaja) {\n  const dn=['Dom','Lun','Mar','Mi\\u00e9','Jue','Vie','S\\u00e1b'];\n  s.estado='fecha_hora'; staticData.sessions[input.telefono]=s;\n  return [{ json: Object.assign({},input,{respuesta:'\\ud83d\\ude14 '+odontologo.nombre+' no atiende los '+dn[rawDay]+'.\\n\\n\\ud83d\\udcc5 \\u00bfQu\\u00e9 otro d\\u00eda?\\n\\nEscribe el d\\u00eda o una fecha (ej. *05/05/2026*).',session:JSON.parse(JSON.stringify(s)),_error:'no_trabaja'}) }];\n}\n\nconst todosSlots=generarSlots(fecha,odontologo.inicio,horaFin,odontologo.duracion_min);\nconst fechaStr=fecha.toLocaleDateString('es-VE',{weekday:'long',day:'numeric',month:'long',year:'numeric'});\nconst tMin=new Date(fecha); tMin.setHours(0,0,0,0);\nconst tMax=new Date(fecha); tMax.setHours(23,59,59,999);\nconst freebusy_params={timeMin:tMin.toISOString(),timeMax:tMax.toISOString(),items:[{id:odontologo.calendar_id}]};\n\ns.estado='verificando_disponibilidad'; s.todos_slots=todosSlots; s.fecha_str=fechaStr; s.esProximos=esProximos;\nif (offsetUsado!==null) s.ultimo_offset=offsetUsado;\nstaticData.sessions[input.telefono]=s;\nreturn [{ json: Object.assign({},input,{session:JSON.parse(JSON.stringify(s)),todos_slots:todosSlots,fecha_str:fechaStr,freebusy_params,esProximos,ultimo_offset:offsetUsado,_error:null}) }];"
+      },
+      "id": "node-check-slots", "name": "Verificar Disponibilidad",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [860, 200]
+    },
+    {
+      "parameters": {
+        "rules": { "values": [{ "conditions": { "conditions": [{ "leftValue": "={{ $json._error }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty" } }] }, "renameOutput": true, "outputKey": "error" }] },
+        "options": { "fallbackOutput": "extra" }
+      },
+      "id": "node-router-disp", "name": "Router Disponibilidad",
+      "type": "n8n-nodes-base.switch", "typeVersion": 3, "position": [1060, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/calendar/v3/freeBusy",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ $json.freebusy_params }}",
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "id": "node-freebusy", "name": "Consultar Freebusy",
+      "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2,
+      "continueOnFail": true, "position": [1280, 100],
+      "credentials": { "googleCalendarOAuth2Api": { "id": "", "name": "Google Calendar account 2" } }
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const verificarData = $('Verificar Disponibilidad').first().json;\nconst freebusyResp = $input.first().json;\nconst telefono = verificarData.telefono;\nconst session = verificarData.session;\nconst odontologo = session.odontologo || {};\nconst todosSlots = verificarData.todos_slots || [];\nconst fechaStr = verificarData.fecha_str || '';\nconst esProximos = verificarData.esProximos;\nconst ultimoOffset = verificarData.ultimo_offset;\n\nlet ocupados = [];\ntry {\n  const calId = odontologo.calendar_id;\n  if (freebusyResp.calendars && freebusyResp.calendars[calId]) {\n    ocupados = freebusyResp.calendars[calId].busy || [];\n  }\n} catch(e) { ocupados = []; }\n\nconst libres = todosSlots.filter(sl => {\n  const sS=new Date(sl.inicio).getTime(); const sE=new Date(sl.fin).getTime();\n  return !ocupados.some(b => sS < new Date(b.end).getTime() && sE > new Date(b.start).getTime());\n});\nconst primeros = libres.slice(0,3);\n\nconst staticData=$getWorkflowStaticData('global');\nif (!staticData.sessions) staticData.sessions={};\nconst s=JSON.parse(JSON.stringify(staticData.sessions[telefono]||{}));\ns.odontologo=odontologo; s.nombre_paciente=session.nombre_paciente; s.servicio=session.servicio;\n\nlet respuesta='';\nif (primeros.length>0) {\n  s.estado='seleccion_slot'; s.slots_propuestos=primeros;\n  respuesta='\\ud83d\\udcc5 *Horarios disponibles con '+odontologo.nombre+'*\\n'+fechaStr+':\\n\\n'+primeros.map((sl,i)=>(i+1)+'\\ufe0f\\u20e3 '+sl.label+' hrs').join('\\n')+'\\n\\n\\u00bfCu\\u00e1l prefieres? Responde *1*, *2* o *3*.';\n} else {\n  s.estado='fecha_hora';\n  respuesta='\\ud83d\\ude14 Todos los horarios de ese d\\u00eda est\\u00e1n ocupados.\\n\\n\\ud83d\\udcc5 \\u00bfQu\\u00e9 otro d\\u00eda prefieres?\\n\\nEscribe el d\\u00eda (ej. *lunes*) o una fecha (ej. *05/05/2026*).';\n}\n\nstaticData.sessions[telefono]=s;\nreturn [{ json: { telefono, session: JSON.parse(JSON.stringify(s)), respuesta } }];"
+      },
+      "id": "node-filter-slots", "name": "Filtrar Slots Libres",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1500, 100]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const input = $input.first().json;\nconst session = input.session;\nconst odontologo = session.odontologo;\nconst slot = session.slot_confirmado;\nif (!slot||!odontologo) return [{ json:{...input,respuesta:'\\u274c Error al crear la cita. Escribe *hola* para reiniciar.'} }];\nconst staticData=$getWorkflowStaticData('global');\nstaticData.pendingConfirmation={telefono:input.telefono,session};\nconst np=session.nombre_paciente||input.telefono;\nconst titulo='Cita '+odontologo.especialidad+' - '+np;\nconst descripcion='Paciente: '+np+'\\nTel\\u00e9fono: +'+input.telefono+'\\nServicio: '+(session.servicio||'')+'\\nCanal: WhatsApp Bot\\nAgendado: DentiFlow / Implantarte';\nreturn [{ json:{...input,evento:{titulo,descripcion,inicio:new Date(slot.inicio).toISOString(),fin:new Date(slot.fin).toISOString(),calendar_id:odontologo.calendar_id||'primary'}} }];"
+      },
+      "id": "node-prep-evento", "name": "Preparar Evento",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [860, 600]
+    },
+    {
+      "parameters": {
+        "calendarId": { "mode": "id", "value": "={{ $json.evento.calendar_id }}" },
+        "start": "={{ $json.evento.inicio }}", "end": "={{ $json.evento.fin }}",
+        "additionalFields": { "summary": "={{ $json.evento.titulo }}", "description": "={{ $json.evento.descripcion }}" }
+      },
+      "id": "node-gcal-create", "name": "Crear Cita en Calendar",
+      "type": "n8n-nodes-base.googleCalendar", "typeVersion": 1.3, "position": [1080, 600],
+      "credentials": { "googleCalendarOAuth2Api": { "id": "", "name": "Google Calendar account 2" } }
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const gcalResp = $input.first().json;\nconst staticData=$getWorkflowStaticData('global');\nconst pending=staticData.pendingConfirmation||{};\nconst telefono=pending.telefono||gcalResp.telefono||'desconocido';\nconst session=pending.session||gcalResp.session||{};\nconst odontologo=session.odontologo||{};\nconst slot=session.slot_confirmado||{};\nconst eventId=gcalResp.id||gcalResp.eventId||null;\nconst inicio=slot.inicio?new Date(slot.inicio):new Date();\nconst fechaStr=inicio.toLocaleDateString('es-VE',{weekday:'long',day:'numeric',month:'long',year:'numeric'});\nconst horaStr=slot.label||inicio.toLocaleTimeString('es-VE',{hour:'2-digit',minute:'2-digit',hour12:false});\nconst updatedSession={estado:'gestion_cita',ultima_cita:slot,odontologo:session.odontologo,nombre_paciente:session.nombre_paciente,servicio:session.servicio,event_id:eventId};\nif (staticData.sessions) staticData.sessions[telefono]=updatedSession;\ndelete staticData.pendingConfirmation;\nconst respuesta=[\n  '\\u2705 *\\u00a1Cita confirmada en Implantarte!*','',\n  '\\ud83d\\udc68\\u200d\\u2695\\ufe0f *'+(odontologo.nombre||'')+'*',\n  '\\ud83e\\uddb7 '+(odontologo.especialidad||''),\n  '\\ud83d\\udcc5 '+fechaStr,\n  '\\ud83d\\udd50 '+horaStr+' hrs',\n  '\\ud83d\\udc64 '+(session.nombre_paciente||''),'',\n  '\\ud83d\\udccd *Implantarte \\u2014 Cl\\u00ednica Dental*','',\n  '\\ud83d\\udccc *Recuerda:*',\n  '\\u2022 Llegar *10 minutos antes*',\n  '\\u2022 Traer c\\u00e9dula de identidad',\n  '\\u2022 Para cancelar av\\u00edsanos con *24 horas* de anticipaci\\u00f3n','',\n  'Escribe:',\n  '1\\ufe0f\\u20e3 Reportar resultado',\n  '2\\ufe0f\\u20e3 Reagendar',\n  '3\\ufe0f\\u20e3 Men\\u00fa principal',\n  '4\\ufe0f\\u20e3 \\u274c Cancelar cita'\n].join('\\n');\nreturn [{ json:{telefono,session:updatedSession,respuesta} }];"
+      },
+      "id": "node-confirm-response", "name": "Respuesta Confirmacion",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1300, 600]
+    },
+    {
+      "parameters": {
+        "resource": "event", "operation": "delete",
+        "calendarId": { "mode": "id", "value": "={{ $json.session.odontologo.calendar_id }}" },
+        "eventId": "={{ $json.session.event_id }}"
+      },
+      "id": "node-gcal-delete", "name": "Cancelar Cita en Calendar",
+      "type": "n8n-nodes-base.googleCalendar", "typeVersion": 1.3,
+      "continueOnFail": true, "position": [860, 820],
+      "credentials": { "googleCalendarOAuth2Api": { "id": "", "name": "Google Calendar account 2" } }
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const input = $input.first().json;\nconst telefono = input.telefono;\nconst staticData=$getWorkflowStaticData('global');\nif (!staticData.sessions) staticData.sessions={};\nconst updatedSession={estado:'completado'};\nstaticData.sessions[telefono]=updatedSession;\nconst respuesta='\\u2705 *Tu cita ha sido cancelada.*\\n\\nLo sentimos si tuviste que cancelar. Escribe *hola* cuando quieras agendar una nueva cita en Implantarte. \\ud83e\\uddb7';\nreturn [{ json:{telefono,session:updatedSession,respuesta} }];"
+      },
+      "id": "node-cancel-response", "name": "Respuesta Cancelacion",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1080, 820]
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={{ { \"respuesta\": $json.respuesta, \"estado\": $json.session ? $json.session.estado : null } }}" },
+      "id": "node-respond-1", "name": "Responder al Simulador A",
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.5, "position": [1080, 420]
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={{ { \"respuesta\": $json.respuesta, \"estado\": $json.session ? $json.session.estado : null } }}" },
+      "id": "node-respond-2", "name": "Responder al Simulador B",
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.5, "position": [1720, 200]
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={{ { \"respuesta\": $json.respuesta, \"estado\": $json.session ? $json.session.estado : null } }}" },
+      "id": "node-respond-3", "name": "Responder al Simulador C",
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.5, "position": [1520, 600]
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={{ { \"respuesta\": $json.respuesta, \"estado\": $json.session ? $json.session.estado : null } }}" },
+      "id": "node-respond-4", "name": "Responder al Simulador D",
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.5, "position": [1300, 820]
+    }
+  ],
+  "connections": {
+    "Webhook Entrada": { "main": [[{ "node": "Session Manager", "type": "main", "index": 0 }]] },
+    "Session Manager": { "main": [[{ "node": "Router de Acciones", "type": "main", "index": 0 }]] },
+    "Router de Acciones": {
+      "main": [
+        [{ "node": "Verificar Disponibilidad", "type": "main", "index": 0 }],
+        [{ "node": "Preparar Evento", "type": "main", "index": 0 }],
+        [{ "node": "Cancelar Cita en Calendar", "type": "main", "index": 0 }],
+        [{ "node": "Responder al Simulador A", "type": "main", "index": 0 }]
+      ]
+    },
+    "Verificar Disponibilidad": { "main": [[{ "node": "Router Disponibilidad", "type": "main", "index": 0 }]] },
+    "Router Disponibilidad": {
+      "main": [
+        [{ "node": "Responder al Simulador B", "type": "main", "index": 0 }],
+        [{ "node": "Consultar Freebusy", "type": "main", "index": 0 }]
+      ]
+    },
+    "Consultar Freebusy": { "main": [[{ "node": "Filtrar Slots Libres", "type": "main", "index": 0 }]] },
+    "Filtrar Slots Libres": { "main": [[{ "node": "Responder al Simulador B", "type": "main", "index": 0 }]] },
+    "Preparar Evento": { "main": [[{ "node": "Crear Cita en Calendar", "type": "main", "index": 0 }]] },
+    "Crear Cita en Calendar": { "main": [[{ "node": "Respuesta Confirmacion", "type": "main", "index": 0 }]] },
+    "Respuesta Confirmacion": { "main": [[{ "node": "Responder al Simulador C", "type": "main", "index": 0 }]] },
+    "Cancelar Cita en Calendar": { "main": [[{ "node": "Respuesta Cancelacion", "type": "main", "index": 0 }]] },
+    "Respuesta Cancelacion": { "main": [[{ "node": "Responder al Simulador D", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true, "callerPolicy": "workflowsFromSameOwner" },
+  "tags": []
+}

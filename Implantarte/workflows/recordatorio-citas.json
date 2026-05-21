@@ -1,0 +1,113 @@
+{
+  "name": "Recordatorio Citas - Implantarte",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 8 * * *" }]
+        }
+      },
+      "id": "node-schedule-rec",
+      "name": "Ejecutar Diario 8am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 400]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const hoy = new Date();\nconst manana = new Date(hoy);\nmanana.setDate(manana.getDate() + 1);\nconst tMin = new Date(manana); tMin.setHours(0,0,0,0);\nconst tMax = new Date(manana); tMax.setHours(23,59,59,999);\nconst timeMin = tMin.toISOString();\nconst timeMax = tMax.toISOString();\nreturn [\n  { json: { calendar_id: '3e2d7a3f62231eff8e8f233ec1dbe1f8a416539f52530171c9e457d7c735e87a@group.calendar.google.com', doctor: 'Dr. Alejandro Contreras', especialidad: 'Implantología y Cirugía', timeMin, timeMax } },\n  { json: { calendar_id: '7b66ca52aef646deff180d5d8e1fcb1767ae9f26db8304f9879c93cdaffe2dfe@group.calendar.google.com', doctor: 'Dra. María B. Fuenmayor', especialidad: 'Ortodoncia', timeMin, timeMax } },\n  { json: { calendar_id: 'cf87f5290d01e5ad24e5e8fe6f0251a57e757c1fb3b95c706ca0c924fc779930@group.calendar.google.com', doctor: 'Dr. Germán', especialidad: 'Odontología General', timeMin, timeMax } },\n  { json: { calendar_id: 'cb7d0c4882de72e7b799c6f0c91291beef2dca67a9f23485428203f786ee3e4c@group.calendar.google.com', doctor: 'Dra. Vanessa', especialidad: 'Odontología Estética', timeMin, timeMax } },\n  { json: { calendar_id: 'b45e211b61fb2ddb7309f449c7cc507edd0a9b90e2d359bead1fdc2639b0af4f@group.calendar.google.com', doctor: 'Dra. Beatriz', especialidad: 'Radiología', timeMin, timeMax } }\n];"
+      },
+      "id": "node-prep-cals",
+      "name": "Preparar Calendarios",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 400]
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "getAll",
+        "calendarId": { "mode": "id", "value": "={{ $json.calendar_id }}" },
+        "returnAll": true,
+        "additionalFields": {
+          "timeMin": "={{ $json.timeMin }}",
+          "timeMax": "={{ $json.timeMax }}",
+          "singleEvents": true
+        }
+      },
+      "id": "node-gcal-get-events",
+      "name": "Obtener Eventos Manana",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "continueOnFail": true,
+      "position": [640, 400],
+      "credentials": { "googleCalendarOAuth2Api": { "id": "", "name": "Google Calendar account 2" } }
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const calendarios = $('Preparar Calendarios').all();\nconst resultados = [];\nfor (const item of $input.all()) {\n  const ev = item.json;\n  const pIdx = (item.pairedItem && typeof item.pairedItem.item === 'number') ? item.pairedItem.item : 0;\n  const docInfo = calendarios[pIdx] ? calendarios[pIdx].json : {};\n  const desc = ev.description || '';\n  const match = desc.match(/Teléfono:\\s*\\+?(\\d+)/i);\n  const telefono = match ? match[1] : null;\n  const inicioRaw = ev.start ? (ev.start.dateTime || ev.start.date) : null;\n  const inicio = inicioRaw ? new Date(inicioRaw) : null;\n  const horaStr = inicio ? inicio.toLocaleTimeString('es-VE',{hour:'2-digit',minute:'2-digit',hour12:false}) : '';\n  const fechaStr = inicio ? inicio.toLocaleDateString('es-VE',{weekday:'long',day:'numeric',month:'long'}) : 'ma\\u00f1ana';\n  const pacienteNombre = (ev.summary || '').split(' - ')[1] || 'paciente';\n  const lineas = [\n    '\\ud83e\\uddb7 *Recordatorio de Cita \\u2014 Implantarte*', '',\n    'Hola *' + pacienteNombre + '*, tu cita es *ma\\u00f1ana*:', '',\n    '\\ud83d\\udc68\\u200d\\u2695\\ufe0f ' + (docInfo.doctor || ''),\n    '\\ud83e\\uddb7 ' + (docInfo.especialidad || ''),\n    '\\ud83d\\udcc5 ' + fechaStr,\n    '\\ud83d\\udd50 ' + horaStr + ' hrs', '',\n    '\\ud83d\\udccd *Implantarte \\u2014 Cl\\u00ednica Dental*', '',\n    '\\ud83d\\udccc *Recuerda:*',\n    '\\u2022 Llegar *10 minutos antes*',\n    '\\u2022 Traer c\\u00e9dula de identidad',\n    '\\u2022 Para cancelar escribe *cancelar*', '',\n    '\\u00a1Te esperamos!'\n  ];\n  const mensaje = lineas.join('\\n');\n  resultados.push({ json: { telefono, mensaje, doctor: docInfo.doctor, paciente: pacienteNombre, tiene_telefono: !!telefono } });\n}\nreturn resultados;"
+      },
+      "id": "node-parse-reminders",
+      "name": "Parsear Recordatorios",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [860, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [{
+            "id": "tel-check",
+            "leftValue": "={{ $json.tiene_telefono }}",
+            "rightValue": true,
+            "operator": { "type": "boolean", "operation": "equals" }
+          }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-if-has-tel",
+      "name": "Tiene Telefono",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1080, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://devlikeaprowaha-production-654e.up.railway.app/api/sendText",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-Api-Key", "value": "wak_LQRXWC9T1/KR7J1F" }]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ { session: 'default', to: $json.telefono + '@c.us', text: $json.mensaje } }}",
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "id": "node-waha-request",
+      "name": "Enviar Recordatorio WAHA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "continueOnFail": true,
+      "position": [1300, 300]
+    }
+  ],
+  "connections": {
+    "Ejecutar Diario 8am": { "main": [[{ "node": "Preparar Calendarios", "type": "main", "index": 0 }]] },
+    "Preparar Calendarios": { "main": [[{ "node": "Obtener Eventos Manana", "type": "main", "index": 0 }]] },
+    "Obtener Eventos Manana": { "main": [[{ "node": "Parsear Recordatorios", "type": "main", "index": 0 }]] },
+    "Parsear Recordatorios": { "main": [[{ "node": "Tiene Telefono", "type": "main", "index": 0 }]] },
+    "Tiene Telefono": {
+      "main": [
+        [{ "node": "Enviar Recordatorio WAHA", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true, "callerPolicy": "workflowsFromSameOwner" },
+  "tags": []
+}

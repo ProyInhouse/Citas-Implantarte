@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Implantarte — Simulador WhatsApp</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #111b21; height: 100vh; display: flex; align-items: center; justify-content: center; }
+
+  .app { display: flex; gap: 20px; width: 100%; max-width: 1100px; padding: 20px; height: 90vh; }
+
+  /* Phone frame */
+  .phone { width: 380px; flex-shrink: 0; background: #111b21; border-radius: 20px; border: 2px solid #2a373f; display: flex; flex-direction: column; overflow: hidden; }
+
+  .phone-header { background: #202c33; padding: 14px 16px; display: flex; align-items: center; gap: 10px; }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; background: #00a884; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .contact-info h3 { color: #e9edef; font-size: 15px; font-weight: 500; }
+  .contact-info p { color: #8696a0; font-size: 12px; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #00a884; margin-left: auto; }
+
+  .chat-bg { flex: 1; background: #0b141a; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+  .chat-bg::-webkit-scrollbar { width: 4px; }
+  .chat-bg::-webkit-scrollbar-thumb { background: #2a373f; border-radius: 2px; }
+
+  .bubble { max-width: 85%; padding: 8px 10px; border-radius: 8px; font-size: 13.5px; line-height: 1.5; position: relative; word-wrap: break-word; }
+  .bubble.incoming { background: #202c33; color: #e9edef; border-top-left-radius: 0; align-self: flex-start; }
+  .bubble.outgoing { background: #005c4b; color: #e9edef; border-top-right-radius: 0; align-self: flex-end; }
+  .bubble .time { font-size: 10px; color: #8696a0; margin-top: 3px; text-align: right; }
+  .bubble strong { font-weight: 600; }
+  .bubble em { font-style: italic; color: #aebac1; }
+  .typing { background: #202c33; border-top-left-radius: 0; align-self: flex-start; padding: 10px 14px; border-radius: 8px; }
+  .typing span { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #8696a0; animation: bounce 1.2s infinite; }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
+
+  .input-bar { background: #202c33; padding: 10px 12px; display: flex; gap: 8px; align-items: center; }
+  .input-bar input { flex: 1; background: #2a373f; border: none; border-radius: 20px; padding: 10px 14px; color: #e9edef; font-size: 14px; outline: none; }
+  .input-bar input::placeholder { color: #8696a0; }
+  .send-btn { width: 42px; height: 42px; border-radius: 50%; background: #00a884; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s; }
+  .send-btn:hover { background: #02b597; }
+  .send-btn svg { fill: white; }
+
+  /* Quick reply buttons */
+  .quick-replies { padding: 6px 12px 2px; background: #0b141a; display: flex; flex-wrap: wrap; gap: 6px; }
+  .qr-btn { background: #1f2c34; border: 1px solid #2a373f; color: #00a884; border-radius: 16px; padding: 5px 12px; font-size: 12px; cursor: pointer; transition: background 0.15s; white-space: nowrap; }
+  .qr-btn:hover { background: #2a373f; }
+
+  /* Right panel */
+  .panel { flex: 1; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+  .panel-card { background: #202c33; border-radius: 12px; padding: 16px; }
+  .panel-title { color: #8696a0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+
+  /* Webhook config */
+  .url-row { display: flex; gap: 8px; }
+  .url-row input { flex: 1; background: #2a373f; border: none; border-radius: 8px; padding: 8px 12px; color: #e9edef; font-size: 12px; outline: none; font-family: monospace; }
+  .url-row button { background: #00a884; border: none; border-radius: 8px; padding: 8px 14px; color: white; font-size: 12px; cursor: pointer; white-space: nowrap; }
+
+  /* Phone input */
+  .phone-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .phone-row label { color: #8696a0; font-size: 12px; white-space: nowrap; }
+  .phone-row input { flex: 1; background: #2a373f; border: none; border-radius: 8px; padding: 7px 12px; color: #e9edef; font-size: 12px; outline: none; }
+
+  /* Request log */
+  .log-box { flex: 1; background: #0b141a; border-radius: 8px; padding: 10px; overflow-y: auto; font-family: monospace; font-size: 11px; min-height: 0; }
+  .log-box::-webkit-scrollbar { width: 4px; }
+  .log-box::-webkit-scrollbar-thumb { background: #2a373f; }
+  .log-entry { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #1a2630; }
+  .log-label { color: #8696a0; margin-bottom: 3px; }
+  .log-req { color: #7dd3fc; }
+  .log-res { color: #86efac; }
+  .log-err { color: #fca5a5; }
+
+  /* State badge */
+  .state-badge { display: inline-block; background: #2a373f; border-radius: 12px; padding: 3px 10px; font-size: 11px; color: #00a884; font-weight: 500; margin-top: 6px; }
+
+  /* Doctor schedule */
+  .doctor-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid #2a373f; font-size: 12px; }
+  .doctor-row:last-child { border-bottom: none; }
+  .doc-name { color: #e9edef; font-weight: 500; }
+  .doc-schedule { color: #8696a0; text-align: right; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Phone Simulator -->
+  <div class="phone">
+    <div class="phone-header">
+      <div class="avatar">🦷</div>
+      <div class="contact-info">
+        <h3>Implantarte</h3>
+        <p>Bot de Citas</p>
+      </div>
+      <div class="status-dot"></div>
+    </div>
+
+    <div class="chat-bg" id="chat"></div>
+
+    <div class="quick-replies" id="quick-replies">
+      <button class="qr-btn" onclick="sendMsg('1')">1️⃣ Odontología</button>
+      <button class="qr-btn" onclick="sendMsg('2')">2️⃣ Radiología</button>
+      <button class="qr-btn" onclick="sendMsg('3')">3️⃣ Precios</button>
+      <button class="qr-btn" onclick="sendMsg('4')">4️⃣ Resultados</button>
+      <button class="qr-btn" onclick="sendMsg('hola')">👋 Reiniciar</button>
+    </div>
+
+    <div class="input-bar">
+      <input type="text" id="msg-input" placeholder="Escribe un mensaje..." onkeypress="if(event.key==='Enter') enviar()">
+      <button class="send-btn" onclick="enviar()">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Right Panel -->
+  <div class="panel">
+
+    <!-- Webhook Config -->
+    <div class="panel-card">
+      <div class="panel-title">Configuración del webhook</div>
+      <div class="url-row">
+        <input type="text" id="webhook-url" value="http://localhost:5678/webhook/implantarte-citas" placeholder="URL del webhook n8n">
+        <button onclick="testConnection()">Probar</button>
+      </div>
+      <div class="phone-row">
+        <label>Teléfono simulado:</label>
+        <input type="text" id="phone-sim" value="04141234567" placeholder="04141234567">
+      </div>
+      <div style="margin-top:8px">
+        <span class="state-badge" id="state-badge">Estado: inicio</span>
+      </div>
+    </div>
+
+    <!-- Horarios -->
+    <div class="panel-card">
+      <div class="panel-title">Horarios de prueba configurados</div>
+      <div class="doctor-row">
+        <span class="doc-name">Dr. Alejandro Contreras</span>
+        <span class="doc-schedule">Implantología · Lun-Vie 8-17h · Sáb 9-13h</span>
+      </div>
+      <div class="doctor-row">
+        <span class="doc-name">Dra. María B. Fuenmayor</span>
+        <span class="doc-schedule">Ortodoncia · Lun·Mié·Vie 9-18h</span>
+      </div>
+      <div class="doctor-row">
+        <span class="doc-name">Dr. Germán</span>
+        <span class="doc-schedule">Odontología General · Mar-Sáb 8-16h</span>
+      </div>
+      <div class="doctor-row">
+        <span class="doc-name">Dra. Vanessa</span>
+        <span class="doc-schedule">Estética · Lun-Jue 10-19h</span>
+      </div>
+      <div class="doctor-row">
+        <span class="doc-name">Dra. Beatriz</span>
+        <span class="doc-schedule">Radiología · Lun-Vie 8-15h</span>
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div class="panel-card" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <div class="panel-title" style="margin-bottom:0">Log de peticiones</div>
+        <button onclick="document.getElementById('log').innerHTML=''" style="background:none;border:none;color:#8696a0;font-size:11px;cursor:pointer;">Limpiar</button>
+      </div>
+      <div class="log-box" id="log">
+        <div class="log-entry"><div class="log-label">Esperando mensajes...</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+let messageCount = 0;
+
+function formatBubble(text) {
+  return text
+    .replace(/\*(.*?)\*/g, '<strong>$1</strong>')
+    .replace(/_(.*?)_/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
+}
+
+function addBubble(text, type, timestamp) {
+  const chat = document.getElementById('chat');
+  const time = timestamp || new Date().toLocaleTimeString('es', {hour:'2-digit',minute:'2-digit'});
+  const div = document.createElement('div');
+  div.className = `bubble ${type}`;
+  div.innerHTML = `${formatBubble(text)}<div class="time">${time}</div>`;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function showTyping() {
+  const chat = document.getElementById('chat');
+  const div = document.createElement('div');
+  div.className = 'typing';
+  div.id = 'typing-indicator';
+  div.innerHTML = '<span></span><span></span><span></span>';
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+function removeTyping() {
+  const t = document.getElementById('typing-indicator');
+  if (t) t.remove();
+}
+
+function logRequest(req, res, error) {
+  const log = document.getElementById('log');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  const time = new Date().toLocaleTimeString('es');
+  entry.innerHTML = `
+    <div class="log-label">[${time}] Mensaje enviado</div>
+    <div class="log-req">→ REQ: ${JSON.stringify(req, null, 0).slice(0, 200)}</div>
+    ${error ? `<div class="log-err">✗ ERROR: ${error}</div>` :
+      `<div class="log-res">← RES: ${JSON.stringify(res, null, 0).slice(0, 300)}</div>`}
+  `;
+  log.insertBefore(entry, log.firstChild);
+}
+
+function updateQuickReplies(estado) {
+  const qr = document.getElementById('quick-replies');
+  const badge = document.getElementById('state-badge');
+  badge.textContent = `Estado: ${estado}`;
+
+  const maps = {
+    'seleccion_odontologo': [
+      {label:'1️⃣ Alejandro', val:'1'}, {label:'2️⃣ María', val:'2'},
+      {label:'3️⃣ Germán', val:'3'}, {label:'4️⃣ Vanessa', val:'4'},
+      {label:'5️⃣ Beatriz', val:'5'}
+    ],
+    'fecha_hora': [
+      {label:'📅 Mañana', val:'mañana'}, {label:'Lunes', val:'lunes'},
+      {label:'Martes', val:'martes'}, {label:'Miércoles', val:'miercoles'},
+      {label:'Jueves', val:'jueves'}, {label:'Viernes', val:'viernes'}
+    ],
+    'seleccion_slot': [
+      {label:'1️⃣ Primer horario', val:'1'},
+      {label:'2️⃣ Segundo horario', val:'2'},
+      {label:'3️⃣ Tercer horario', val:'3'}
+    ],
+    'confirmacion': [
+      {label:'✅ 1 Confirmar', val:'1'}, {label:'❌ 2 Otro día', val:'2'}
+    ],
+    'solicitar_nombre': [],
+    'cita_confirmada': [
+      {label:'✅ 1 Reportar resultado', val:'1'}, {label:'🔄 2 Reagendar', val:'2'}, {label:'🦷 3 Menú', val:'3'}
+    ],
+    'gestion_cita': [
+      {label:'✅ 1 Reportar resultado', val:'1'}, {label:'🔄 2 Reagendar', val:'2'}, {label:'🦷 3 Menú', val:'3'}
+    ],
+    'realizacion_cita': [
+      {label:'✅ 1 Realizada', val:'1'}, {label:'❌ 2 No asistí', val:'2'}, {label:'🔄 3 Reagendar', val:'3'}
+    ],
+    'fin_proceso': [
+      {label:'💰 1 Presupuesto', val:'1'}, {label:'📅 2 Nueva cita', val:'2'}, {label:'👋 3 Cerrar', val:'3'}
+    ],
+    'inicio': [
+      {label:'1️⃣ Odontología', val:'1'}, {label:'2️⃣ Radiología', val:'2'},
+      {label:'3️⃣ Precios', val:'3'}, {label:'4️⃣ Resultados', val:'4'},
+      {label:'👋 Reiniciar', val:'hola'}
+    ]
+  };
+
+  const buttons = maps[estado] || maps['inicio'];
+  qr.innerHTML = buttons.map(b =>
+    `<button class="qr-btn" onclick="sendMsg('${b.val}')">${b.label}</button>`
+  ).join('');
+
+  const input = document.getElementById('msg-input');
+  const placeholders = {
+    'solicitar_nombre': 'Escribe tu nombre y apellido...',
+    'fecha_hora': 'Escribe hoy, mañana, lunes... o DD/MM/YYYY',
+  };
+  input.placeholder = placeholders[estado] || 'Escribe un mensaje...';
+}
+
+async function sendMsg(text) {
+  if (!text.trim()) return;
+  document.getElementById('msg-input').value = '';
+
+  const url = document.getElementById('webhook-url').value.trim();
+  const telefono = document.getElementById('phone-sim').value.trim() || '04141234567';
+
+  if (!url) {
+    alert('Ingresa la URL del webhook primero');
+    return;
+  }
+
+  addBubble(text, 'outgoing');
+  const typing = showTyping();
+
+  const payload = { telefono, mensaje: text };
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const raw = await res.text();
+    removeTyping();
+
+    let respuesta, estado;
+    try {
+      const data = JSON.parse(raw);
+      respuesta = data.respuesta;
+      estado = data.estado;
+    } catch {
+      const match = raw.match(/<Message>([\s\S]*?)<\/Message>/);
+      if (match) respuesta = match[1];
+    }
+
+    if (respuesta) {
+      setTimeout(() => {
+        addBubble(respuesta, 'incoming');
+        if (estado) updateQuickReplies(estado);
+      }, 300);
+    }
+
+    logRequest(payload, { respuesta, raw: raw.slice(0, 200) });
+
+  } catch (err) {
+    removeTyping();
+    addBubble('⚠️ Error de conexión. Verifica la URL del webhook y que el workflow esté activo en n8n.', 'incoming');
+    logRequest(payload, null, err.message);
+  }
+}
+
+function enviar() {
+  const input = document.getElementById('msg-input');
+  if (input.value.trim()) sendMsg(input.value.trim());
+}
+
+async function testConnection() {
+  const url = document.getElementById('webhook-url').value.trim();
+  if (!url) return;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telefono: 'test', mensaje: 'ping' })
+    });
+    const raw = await res.text();
+    addBubble('✅ Conexión exitosa con n8n!', 'incoming');
+    logRequest({test:'ping'}, { raw: raw.slice(0, 200) });
+  } catch (e) {
+    addBubble('❌ No se pudo conectar. Verifica que el workflow esté activo (Published) en n8n.', 'incoming');
+  }
+}
+
+// Mensaje de bienvenida
+setTimeout(() => {
+  addBubble('🦷 *¡Bienvenido a Implantarte!*\n\n¿En qué puedo ayudarte hoy?\n\n1️⃣ Agendar cita de Odontología\n2️⃣ Agendar cita de Radiología\n3️⃣ Consulta de Precios\n4️⃣ Reenvío de Resultados\n\nResponde con el número de tu preferencia.', 'incoming');
+}, 500);
+</script>
+</body>
+</html>
