@@ -23,11 +23,11 @@ CREATE TABLE IF NOT EXISTS odontologos (
 -- Insertar odontólogos con horarios de prueba
 INSERT INTO odontologos (codigo, nombre, especialidad, calendar_id, hora_inicio, hora_fin, hora_fin_sab, dias_atencion, duracion_min)
 VALUES
-  ('1', 'Dr. Alejandro Contreras',  ARRAY['Implantología','Cirugía Oral'],  '3e2d7a3f62231eff8e8f233ec1dbe1f8a416539f52530171c9e457d7c735e87a@group.calendar.google.com', '08:00', '17:00', '13:00', ARRAY[1,2,3,4,5,6], 60),
-  ('2', 'Dra. María B. Fuenmayor', ARRAY['Ortodoncia'],                    '7b66ca52aef646deff180d5d8e1fcb1767ae9f26db8304f9879c93cdaffe2dfe@group.calendar.google.com', '09:00', '18:00', NULL,    ARRAY[1,3,5],       60),
-  ('3', 'Dr. Germán',               ARRAY['Odontología General'],           'cf87f5290d01e5ad24e5e8fe6f0251a57e757c1fb3b95c706ca0c924fc779930@group.calendar.google.com', '08:00', '16:00', '16:00', ARRAY[2,3,4,5,6],   45),
-  ('4', 'Dra. Vanessa',             ARRAY['Odontología Estética'],          'cb7d0c4882de72e7b799c6f0c91291beef2dca67a9f23485428203f786ee3e4c@group.calendar.google.com', '10:00', '19:00', NULL,    ARRAY[1,2,3,4],     60),
-  ('5', 'Dra. Beatriz',             ARRAY['Radiología'],                    'b45e211b61fb2ddb7309f449c7cc507edd0a9b90e2d359bead1fdc2639b0af4f@group.calendar.google.com', '08:00', '15:00', NULL,    ARRAY[1,2,3,4,5],   30)
+  ('1', 'Dr. Alejandro Contreras',  ARRAY['Implantología','Cirugía Oral'],  '4bc56f0d270b7a39841779f0fb8ea4ae5f81768619c1d1e080bc48b39e0b4415@group.calendar.google.com', '08:00', '17:00', '13:00', ARRAY[1,2,3,4,5,6], 60),
+  ('2', 'Dra. María B. Fuenmayor',  ARRAY['Ortodoncia'],                    '467b840c9c441c28dc850a65b59ff5b80041c9069b36ab52bb2845be8fa1953e@group.calendar.google.com', '08:00', '14:00', NULL,    ARRAY[1,2,3,4,5],   60),
+  ('3', 'Dr. Germán Valenzuela',    ARRAY['Odontología General'],           'ee0b43d672aa375fd063b8d6a2c74dab6f2bd2a1da36a31300aef895cf991d8c@group.calendar.google.com', '08:00', '16:00', '16:00', ARRAY[2,3,4,5,6],   45),
+  ('4', 'Dra. Vanessa Touza',       ARRAY['Odontología Estética'],          'cb7d0c4882de72e7b799c6f0c91291beef2dca67a9f23485428203f786ee3e4c@group.calendar.google.com', '10:00', '19:00', NULL,    ARRAY[1,2,3,4],     60),
+  ('5', 'Dra. Beatriz Bravo',       ARRAY['Odontopediatría'],               '2a2d690e77424c331b675affdc481a35da4b2e4bb96683827553f1f28d70a1c5@group.calendar.google.com', '08:00', '15:00', NULL,    ARRAY[1,2,3,4,5],   30)
 ON CONFLICT (codigo) DO NOTHING;
 
 -- Pacientes
